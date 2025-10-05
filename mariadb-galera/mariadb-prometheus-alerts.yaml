@@ -1,0 +1,80 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mariadb-alerts
+spec:
+  groups:
+  - name: Mariadb
+    rules:
+    - alert: MariadbGaleraClusterSize
+      expr: 'mysql_global_status_wsrep_cluster_size{} < 3'
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        description: "Galera Cluster Size is less than 3"
+        summary: "Galera cluster node outage"
+    - alert: MariadbGaleraNotReady
+      expr: 'mysql_global_status_wsrep_ready{} != 1'
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        description: '{{$labels.target}} is not ready'
+        summary: 'Galera cluster node not ready'
+    - alert:  MariadbGaleraOutOfSync
+      expr: '(mysql_global_status_wsrep_local_state{} != 4 and mysql_global_variables_wsrep_desync{} == 0)'
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        description: '{{$labels.job}} on {{$labels.target}} is not in sync ({{$value}} != 4).'
+        summary: 'Galera cluster node out of sync'
+    - alert:  MariadbGaleraDonorFallingBehind
+      expr: '(mysql_global_status_wsrep_local_state{} == 2 and mysql_global_status_wsrep_local_recv_queue{} > 100)'
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        description: '{{$labels.job}} on {{$labels.target}} is a donor (hotbackup) and is falling behind (queue size {{$value}})'
+        summary: 'xtradb cluster donor node falling behind'
+    - alert:  MariadbDown
+      expr: 'mysql_up{} == 0'
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Mariadb down (instance {{ $labels.target }})"
+        description: "Mariadb instance is down on {{ $labels.target }}"
+    - alert:  MariadbTooManyConnections
+      expr: 'avg by (instance) (max_over_time(mysql_global_status_threads_connected{ }[5m])) / avg by (instance) (mysql_global_variables_max_connections{ }) * 100 > 80'
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Mariadb too many connections (instance {{ $labels.target }})"
+        description: "More than 80% of Mariadb connections are in use on {{ $labels.target }}"
+    - alert:  MariadbHighThreadsRunning
+      expr: 'avg by (instance) (max_over_time(mysql_global_status_threads_running{ }[5m])) / avg by (instance) (mysql_global_variables_max_connections{ }) * 100 > 60'
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Mariadb high threads running (instance {{ $labels.target }})"
+        description: "More than 60% of Mariadb connections are in running state on {{ $labels.target }}"
+    - alert:  MysqlSlowQueries
+      expr: 'irate(mysql_global_status_slow_queries{ }[1m]) > 0'
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Mariadb slow queries (instance {{ $labels.target }})"
+        description: "Mariadb server is having some slow queries."
+    - alert:  MariadbRestarted
+      expr: 'mysql_global_status_uptime{ } < 60'
+      for: 3m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Mariadb restarted (instance {{ $labels.target }})"
+        description: "Mariadb has just been restarted, less than one minute ago on {{ $labels.target }}"
